@@ -238,6 +238,8 @@ namespace SteamAudio
         // This method is called at app startup (see above).
         void OnApplicationStart(ManagerInitReason reason)
         {
+            mContext = new Context();
+            
             if (reason == ManagerInitReason.Playing)
             {
                 SceneManager.sceneLoaded += OnSceneLoaded;
@@ -245,8 +247,6 @@ namespace SteamAudio
             }
 
             mNumCPUCores = SystemInfo.processorCount;
-
-            mContext = new Context();
 
             if (reason == ManagerInitReason.Playing)
             {
@@ -546,15 +546,13 @@ namespace SteamAudio
         {
             var managerObject = new GameObject("Steam Audio Manager");
             var manager = managerObject.AddComponent<SteamAudioManager>();
+            sSingleton = manager;
+            manager.OnApplicationStart(reason);
 
             if (reason == ManagerInitReason.Playing)
             {
                 DontDestroyOnLoad(managerObject);
             }
-
-            sSingleton = manager;
-
-            manager.OnApplicationStart(reason);
         }
 
         public static void ShutDown()
