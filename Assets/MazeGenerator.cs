@@ -81,7 +81,7 @@ namespace QTea
         /// Starts a generator which calls the callback after every generation
         /// </summary>
         /// <param name="mazeCallback">Callback when a single step is generated</param>
-        public void StartSlowGenerate()
+        public Maze StartSlowGenerate()
         {
             slowGenerateData = new()
             {
@@ -90,9 +90,10 @@ namespace QTea
             };
 
             slowGenerate = true;
+            return new Maze(cells, columns, rows, false, 0);
         }
 
-        public Maze NextSlowGenerate(out int currentCell)
+        public MazeUpdate NextSlowGenerate()
         {
             if (!slowGenerate)
             {
@@ -103,13 +104,18 @@ namespace QTea
                 throw new Exception("Generation is already completed.");
             }
 
-            var result = CarveGreedy(slowGenerateData.nextCell, slowGenerateData.indexStack);
-            slowGenerateData.generateStep++;
-            slowGenerateData.done = result.done;
-            slowGenerateData.nextCell = result.nextCell;
 
-            currentCell = result.nextCell;
-            return new(cells, columns, rows, slowGenerateData.done, slowGenerateData.generateStep);
+            int lastCell = slowGenerateData.nextCell;
+            (bool done, int nextCell) = CarveGreedy(slowGenerateData.nextCell, slowGenerateData.indexStack);
+            slowGenerateData.generateStep++;
+            slowGenerateData.done = done;
+            slowGenerateData.nextCell = nextCell;
+            
+            (int, Cell)[] updatedCells = new (int, Cell)[2];
+            updatedCells[0] = (lastCell, cells[lastCell]);
+            updatedCells[1] = (nextCell, cells[nextCell]);
+
+            return new(updatedCells, slowGenerateData.generateStep, slowGenerateData.done);
         }
 
         private (bool done, int nextCell) CarveGreedy(int currentCell, Stack<int> visitedCells)
@@ -254,6 +260,20 @@ namespace QTea
             Rows = rows;
             Done = done;
             Steps = steps;
+        }
+    }
+
+    public readonly struct MazeUpdate
+    {
+        public readonly (int, Cell)[] CellUpdate;
+        public readonly int Steps;
+        public readonly bool Done;
+
+        public MazeUpdate((int, Cell)[] cellUpdate, int steps, bool done)
+        {
+            CellUpdate = cellUpdate;
+            Steps = steps;
+            Done = done;
         }
     }
 

@@ -1,233 +1,493 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using QTea;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.UI;
+using Debug = UnityEngine.Debug;
 
-public class MazeCreator : MonoBehaviour
+namespace QTea
 {
-    private readonly struct CellView
+    public class MazeCreator : MonoBehaviour
     {
-        internal readonly IReadOnlyList<GameObject> walls;
-        internal readonly GameObject background;
-
-        public CellView(IReadOnlyList<GameObject> walls, GameObject background)
+        private enum DrawMode
         {
-            this.walls = walls;
-            this.background = background;
+           Instance,
+           GPUInstance
         }
-    }
 
-    [SerializeField] private new Camera camera;
-    [SerializeField] private GameObject wallObject;
-    [SerializeField] private GameObject backgroundObject;
-    [SerializeField] private float emptySpace = 1.0f;
-    [SerializeField] private float wallThickness = 0.1f;
-    [SerializeField, HorizontalGroup] private int mazeColumns = 7, mazeRows = 7;
-    [SerializeField] private bool slowGenerate;
-    [SerializeField, ShowIf("slowGenerate")]
-    private float generateDelay = 0.2f;
-
-    private int generateState = -1;
-    
-    [ReadOnly, SerializeField]
-    private int generateStep = 0;
-       
-    private CellView[] cellViews;
-    private MazeGenerator mazeGenerator;
-    private Coroutine mazeGenerationCoroutine;
-    private int currentCell;
-
-    private void Start()
-    {
-        if (!slowGenerate)
+        private struct GPUBatch
         {
-            mazeGenerator = new(mazeColumns, mazeRows, 2, 4, new UnityRandom());
-            BuildMazeBase(mazeColumns, mazeRows);
-            UpdateMaze(mazeGenerator.Generate());
+            internal MaterialPropertyBlock PropertyBlock;
+            internal Matrix4x4[] TransformMatrices;
+            internal int Count;
         }
-    }
 
-    [ShowIf("@slowGenerate && generateState == -1 && UnityEngine.Application.isPlaying")]
-    [Button]
-    private void InitializeMaze()
-    {
-        mazeGenerator = new(mazeColumns, mazeRows, 2, 4, new UnityRandom());
-        BuildMazeBase(mazeColumns, mazeRows);
-        generateState = 0;
-    }
+        [Serializable]
+        private struct InitializeDrawModeSettings
+        {
+            [SerializeField] internal GameObject WallObject;
+            [SerializeField] internal GameObject BackgroundObject;
+        }
 
-    private void BuildMazeBase(int columns, int rows)
-    {
-        cellViews = new CellView[columns * rows];
+        [Serializable]
+        private struct GPUDrawModeSettings
+        {
+            [SerializeField] internal Mesh Mesh;
+            [SerializeField] internal Material Material;
+        }
         
-        for (int col = 0; col < columns; col++)
+        private struct CellView
         {
-            for (int row = 0; row < rows; row++)
-            {
-                Vector2 cellPosition = new Vector2(row * emptySpace, col * emptySpace);
+            internal readonly IReadOnlyList<GameObject> walls;
+            internal readonly GameObject background;
+            internal bool Visited;
+            internal int GPUWalls; 
 
-                Direction[] directions = (Direction[]) Enum.GetValues(typeof(Direction));
+            private SpriteRenderer spriteRenderer;
+
+            internal void SetImage(Color color)
+            {
+                if (!spriteRenderer) spriteRenderer = background.GetComponentInChildren<SpriteRenderer>();
+                spriteRenderer.color = color;
+            }
+
+            public CellView(IReadOnlyList<GameObject> walls, GameObject background)
+            {
+                this.walls = walls;
+                this.background = background;
+                Visited = false;
+                spriteRenderer = null;
+                GPUWalls = 0b1111;
+            }
+        }
+
+        [SerializeField] private new Camera camera;
+        [SerializeField] private DrawMode drawMode = DrawMode.GPUInstance;
+
+        [SerializeField, TitleGroup("GPU Instance Drawing Settings")]
+        [ShowIf("@drawMode == DrawMode.GPUInstance"), HideLabel]
+        private GPUDrawModeSettings gpuDrawSettings;
+
+        [SerializeField, TitleGroup("Instance Drawing Settings")]
+        [ShowIf("@drawMode == DrawMode.Instance"), HideLabel]
+        private InitializeDrawModeSettings instanceDrawSettings;
+        
+        [Title("Maze Settings")]
+        [SerializeField] private float emptySpace = 1.0f;
+        [SerializeField] private float wallThickness = 0.1f;
+        [SerializeField, HorizontalGroup] private int mazeColumns = 7, mazeRows = 7;
+        [SerializeField] private bool slowGenerate;
+        [SerializeField, ShowIf("slowGenerate"), MinValue(0.0)]
+        private float generateDelay = 0.2f;
+        [SerializeField, ShowIf("slowGenerate"), MinValue(1)]
+        private int stepsPerUpdate = 1;
+
+        [Title("Colours")]
+        [SerializeField]
+        private Color defaultGroundColor = Color.red;
+        [SerializeField]
+        private Color currentGroundColor = Color.cyan;
+        [SerializeField]
+        private Color visitedGroundColor = Color.magenta;
+        [SerializeField] private Color wallColor;
+
+        private int generateState = -1;
+
+        [ReadOnly, SerializeField]
+        private int generateStep = 0;
+
+        private CellView[] cellViews;
+        private MazeGenerator mazeGenerator;
+        private Coroutine mazeGenerationCoroutine;
+        private int currentCell;
+
+        private ComputeBuffer argsBuffer;
+        private ComputeBuffer meshPropertiesBuffer;
+        private MeshProperties[] meshProperties;
+        private static readonly int Properties = Shader.PropertyToID("_Properties");
+
+        private int latestGroundUpdate1 = -1;
+        private int latestGroundUpdate2 = -1;
+        private int latestWallUpdate1 = -1;
+        private int latestWallUpdate2 = -1;
+
+        private void Start()
+        {
+            if (!slowGenerate)
+            {
+                mazeGenerator = new(mazeColumns, mazeRows, 2, 4, new UnityRandom());
+                BuildMazeBase(mazeColumns, mazeRows);
+                UpdateMaze(mazeGenerator.Generate(0));
+            }
+        }
+
+        [ShowIf("@slowGenerate && generateState == -1 && UnityEngine.Application.isPlaying")]
+        [Button]
+        private void InitializeMaze()
+        {
+            mazeGenerator = new(mazeColumns, mazeRows, 0, 4, new UnityRandom());
+            BuildMazeBase(mazeColumns, mazeRows);
+            generateState = 0;
+        }
+
+        private void BuildMazeBase(int columns, int rows)
+        {
+            cellViews = new CellView[columns * rows];
+
+            switch (drawMode)
+            {
+                case DrawMode.Instance:
+                    InstantiateMaze(columns, rows);
+                    break;
+                case DrawMode.GPUInstance:
+                    InitializeGPUMaze(columns, rows);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+
+            if (camera)
+            {
+                Vector3 cam = camera.transform.position;
+                cam.x = rows * emptySpace / 2;
+                cam.y = columns * emptySpace / 2 - emptySpace / 2;
+                camera.orthographicSize = cam.y + emptySpace / 2;
+                camera.transform.position = cam;
+            }
+        }
+
+        private void Update()
+        {
+            if (drawMode == DrawMode.GPUInstance && generateState >= 0) DrawGPUInstanced();
+        }
+
+        private void DrawGPUInstanced()
+        {
+            Graphics.DrawMeshInstancedIndirect(gpuDrawSettings.Mesh, 0, 
+                gpuDrawSettings.Material, 
+                new Bounds(Vector3.zero, 
+                    new Vector3(mazeRows * emptySpace, mazeRows * emptySpace, 1f)), 
+                argsBuffer);
+        }
+
+        private void OnDisable()
+        {
+            if (drawMode == DrawMode.GPUInstance && generateState > -1)
+            {
+                argsBuffer.Dispose();
+                meshPropertiesBuffer.Dispose();
+            }
+        }
+
+        private struct MeshProperties
+        {
+            public Matrix4x4 Mat;
+            public Vector4 Color;
+
+            public static int Size => sizeof(float) * 4 * 4 + sizeof(float) * 4;
+        }
+
+        private void InitializeGPUMaze(int columns, int rows)
+        {
+            uint[] args = { 0, 0, 0, 0, 0 };
+            args[0] = gpuDrawSettings.Mesh.GetIndexCount(0);
+            args[1] = (uint)(columns * rows + columns * rows * 4);
+            args[2] = gpuDrawSettings.Mesh.GetIndexStart(0);
+            args[3] = gpuDrawSettings.Mesh.GetBaseVertex(0);
+            argsBuffer = new ComputeBuffer(1, args.Length * sizeof(uint), ComputeBufferType.IndirectArguments);
+            argsBuffer.SetData(args);
+
+            int length = columns * rows + columns * rows * 4;
+            meshProperties = new MeshProperties[length];
+            
+            // ground
+            for (int j = 0; j < columns*rows; j ++)
+            {
+                meshProperties[j].Color = defaultGroundColor;
+                meshProperties[j].Mat = new Matrix4x4();
+                float pos = emptySpace * j;
+                float xPos = j / rows * emptySpace;
+                float yPos = j % rows * emptySpace;
+                meshProperties[j].Mat.SetTRS(
+                    new Vector3(xPos, yPos, 0), 
+                    Quaternion.identity, 
+                    new Vector3(emptySpace, emptySpace, 0));
+            }
+            
+            // walls
+            for (int i = 0; i < length - mazeColumns*mazeRows; i+=4)
+            {
+                int index = i + mazeColumns * mazeRows;
+                for (int j = 0; j < 4; j++)
+                {
+                    meshProperties[index+j].Color = wallColor;
+                    meshProperties[index+j].Mat = new Matrix4x4();
+
+                    Direction dir = (Direction)(1 << j);
+                    Vector3 pos = GetWallPosition(i / 4, dir);
+                    meshProperties[index+j].Mat.SetTRS(pos, Quaternion.identity, GetWallScale(dir));
+                }
+            }
+
+            meshPropertiesBuffer = new ComputeBuffer(length, MeshProperties.Size, ComputeBufferType.Default, ComputeBufferMode.SubUpdates);
+            meshPropertiesBuffer.SetData(meshProperties);
+            gpuDrawSettings.Material.SetBuffer(Properties, meshPropertiesBuffer);
+        }
+
+        private void InstantiateMaze(int columns, int rows)
+        {
+            int length = columns * rows;
+            for (int i = 0; i < length; i++)
+            {
+                int r = i / rows;
+                int c = i % rows;
+                Vector2 cellPosition = new Vector2(r * emptySpace, c * emptySpace);
+                Direction[] directions = (Direction[])Enum.GetValues(typeof(Direction));
 
                 GameObject[] wallObjects = new GameObject[4];
 
-                GameObject backGround = Instantiate(backgroundObject, transform); 
+                GameObject backGround = Instantiate(instanceDrawSettings.BackgroundObject, transform);
                 backGround.transform.position = new Vector3(cellPosition.x, cellPosition.y, 0.1f);
-                backGround.name = $"(r{row}, c{col})";
-                
+                backGround.name = $"(r{r}, c{r})";
+
                 for (int index = 0; index < directions.Length; index++)
                 {
                     Direction direction = directions[index];
-                    wallObjects[index] = PlaceWall(cellPosition, direction, (Direction) 0b1111, backGround.transform);
+                    wallObjects[index] =
+                        PlaceWall(cellPosition, direction, (Direction)0b1111, backGround.transform);
                 }
 
-                CellView cellView = new(wallObjects, backGround);
-                cellViews[row * columns + col] = cellView;
+                cellViews[i] = new(wallObjects, backGround);
             }
         }
 
-        if (camera)
+        private void UpdateMaze(Maze maze)
         {
-            Vector3 cam = camera.transform.position;
-            cam.x = rows * emptySpace / 2;
-            cam.y = columns * emptySpace / 2;
-            camera.orthographicSize = cam.y;
-            camera.transform.position = cam;
-        }
-    }
-
-    private void UpdateMaze(Maze maze)
-    {
-        for (int col = 0; col < maze.Columns; col++)
-        {
-            for (int row = 0; row < maze.Rows; row++)
+            for (int i = 0; i < maze.MazeCells.Length; i++)
             {
-                int index = maze.Columns * row + col;
-                Direction[] directions = (Direction[]) Enum.GetValues(typeof(Direction));
-                foreach (Direction direction in directions)
-                {
-                    UpdateWall(cellViews[index], direction, maze.MazeCells[index].Walls);
-                }
-
-                cellViews[index].background.GetComponentInChildren<SpriteRenderer>().color =
-                    currentCell == index ? Color.cyan : Color.red;
+                UpdateWall(maze.MazeCells[i], i);
             }
+
+            meshPropertiesBuffer.SetData(meshProperties);
+            gpuDrawSettings.Material.SetBuffer(Properties, meshPropertiesBuffer);
         }
-    }
 
-    [ShowIf("@slowGenerate && generateState == 1")]
-    [Button(ButtonSizes.Small)]
-    private void StartAutoGenerate()
-    {
-        generateState = 3;
-        mazeGenerationCoroutine = StartCoroutine(AutoGenerateCoroutine());
-    }
-    
-    [ShowIf("@slowGenerate && generateState == 1")]
-    [Button(ButtonSizes.Small)]
-    private void NextGenerateStep()
-    {
-        Maze maze = mazeGenerator.NextSlowGenerate(out currentCell);
-        generateStep = maze.Steps;
-        if (maze.Done) generateState = 2;
-        UpdateMaze(maze);
-    }
-
-    [ShowIf("@generateState == 3")]
-    [Button(ButtonSizes.Small)]
-    private void StopGeneratingMaze()
-    {
-        StopCoroutine(mazeGenerationCoroutine);
-        generateState = 1;
-    }
-
-    private IEnumerator AutoGenerateCoroutine()
-    {
-        bool done = false;
-        while (!done)
+        private void UpdateWall(Cell cell, int index)
         {
-            if (generateDelay > 0) yield return new WaitForSeconds(generateDelay);
-            else yield return null;
-            Maze maze = mazeGenerator.NextSlowGenerate(out currentCell);
-            generateStep = maze.Steps;
-            UpdateMaze(maze);
-            done = maze.Done;
+            Direction[] directions = (Direction[])Enum.GetValues(typeof(Direction));
+            foreach (Direction direction in directions)
+            {
+                UpdateWallDirection(index, direction, cell.Walls);
+            }
+
+            if (drawMode == DrawMode.Instance)
+            {
+                cellViews[index].SetImage(currentCell == index ? currentGroundColor :
+                    cellViews[index].Visited ? visitedGroundColor : defaultGroundColor);
+            }
+            else
+            {
+                meshProperties[index].Color = currentCell == index ? currentGroundColor :
+                    cellViews[index].Visited ? visitedGroundColor : defaultGroundColor;
+                if (latestGroundUpdate1 >= 0) latestGroundUpdate2 = index;
+                else latestGroundUpdate1 = index;
+            }
+            
+            if (currentCell == index) cellViews[index].Visited = true;
         }
 
-        generateState = 2;
-    }
+        [ShowIf("@slowGenerate && generateState == 1")]
+        [Button(ButtonSizes.Small)]
+        private void StartAutoGenerate()
+        {
+            generateState = 3;
+            mazeGenerationCoroutine = StartCoroutine(AutoGenerateCoroutine());
+        }
+
+        private bool NextGenerateStep()
+        {
+            bool done = false;
+            for (int i = 0; i < stepsPerUpdate; i++)
+            {
+                MazeUpdate maze = mazeGenerator.NextSlowGenerate();
+                currentCell = maze.CellUpdate[1].Item1;
+                
+                generateStep = maze.Steps;
+                done = maze.Done;
+                
+                foreach ((int index, Cell cell) in maze.CellUpdate)
+                {
+                    UpdateWall(cell, index);
+                }
+                
+                UpdateIndex(latestWallUpdate1);
+                UpdateIndex(latestWallUpdate2);
+                UpdateIndex(latestGroundUpdate1);
+                UpdateIndex(latestGroundUpdate2);
+                UpdateIndex(currentCell);
+                latestWallUpdate1 = latestGroundUpdate1 = latestGroundUpdate2 = latestWallUpdate2 = -1;
+
+                if (!maze.Done) continue;
+                generateState = 2;
+                break;
+            }
+
+            return done;
+        }
+
+        private void UpdateIndex(int index)
+        {
+            if (index == -1) return;
+            
+            var a = meshPropertiesBuffer.BeginWrite<MeshProperties>(index, 1);
+            a[0] = meshProperties[index];
+            meshPropertiesBuffer.EndWrite<MeshProperties>(1);
+        }
+
+        [ShowIf("@slowGenerate && generateState == 1")]
+        [Button(ButtonSizes.Small)]
+        private void NextGenerateStepButton() => NextGenerateStep();
+
+        [ShowIf("@generateState == 3")]
+        [Button(ButtonSizes.Small)]
+        private void StopGeneratingMaze()
+        {
+            StopCoroutine(mazeGenerationCoroutine);
+            generateState = 1;
+        }
+
+        private IEnumerator AutoGenerateCoroutine()
+        {
+            bool done = false;
+            while (!done)
+            {
+                if (generateDelay > 0) yield return new WaitForSeconds(generateDelay);
+                else yield return null;
+                done = NextGenerateStep();
+            }
+
+            generateState = 2;
+        }
 
 #if UNITY_EDITOR
-    [ShowIf("@slowGenerate && generateState == 0 && UnityEngine.Application.isPlaying")]
+        [ShowIf("@slowGenerate && generateState == 0 && UnityEngine.Application.isPlaying")]
 #else
     [ShowIf("@slowGenerate && generateState == 0")]
 #endif
-    [Button(ButtonSizes.Small)]
-    private void StartGenerate()
-    {
-        mazeGenerator.StartSlowGenerate();
-        generateState = 1;
-    }
-
-    [ShowIf("@slowGenerate && generateState == 2")]
-    [Button]
-    private void Reset()
-    {
-        mazeGenerator = null;
-        generateState = -1;
-        generateStep = 0;
-
-        for (int i = 0; i < cellViews.Length; i++)
+        [Button(ButtonSizes.Small)]
+        private void StartGenerate()
         {
-            Destroy(cellViews[i].background);
+            mazeGenerator.StartSlowGenerate();
+            generateState = 1;
         }
 
-        cellViews = null;
-    }
-
-    private GameObject PlaceWall(Vector2 cellPosition, Direction direction, Direction wallFlag, Transform parent)
-    {
-        Vector2 position = direction switch
+        [ShowIf("@slowGenerate && generateState == 2")]
+        [Button]
+        private void Reset()
         {
-            Direction.South or Direction.West => new Vector2(cellPosition.x, cellPosition.y),
-            Direction.East => new Vector2(cellPosition.x + emptySpace - wallThickness, cellPosition.y),
-            Direction.North => new Vector2(cellPosition.x, cellPosition.y + emptySpace - wallThickness),
-            _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
-        };
+            OnDisable();
+            
+            mazeGenerator = null;
+            generateState = -1;
+            generateStep = 0;
 
-        Vector2 scale = direction switch
-        {
-            Direction.North or Direction.South => new Vector2(emptySpace, wallThickness),
-            Direction.East or Direction.West => new Vector2(wallThickness, emptySpace),
-            _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
-        };
+            for (int i = 0; i < cellViews.Length; i++)
+            {
+                Destroy(cellViews[i].background);
+            }
 
-        GameObject wall = Instantiate(wallObject, position, Quaternion.identity);
-        wall.transform.localScale = scale;
-        wall.transform.SetParent(parent, true);
-        wall.SetActive(wallFlag.HasFlag(direction));
-        wall.name = $"{parent.name} {direction}";
-        return wall;
-    }
-
-    private void UpdateWall(CellView cellView, Direction direction, Direction wallFlag)
-    {
-        GameObject gameObject = cellView.walls[Array.IndexOf(Enum.GetValues(direction.GetType()), direction)];
-        gameObject.SetActive(wallFlag.HasFlag(direction));
-    }
-    
-    public class UnityRandom : IRandom
-    {
-        public int Range(int exclusiveMax)
-        {
-            return UnityEngine.Random.Range(0, exclusiveMax);
+            cellViews = null;
         }
 
-        public int Range(int inclusiveMin, int exclusiveMax)
+        private Vector3 GetWallPosition(int index, Direction direction)
         {
-            return UnityEngine.Random.Range(inclusiveMin, exclusiveMax);
+            int row = index / mazeRows;
+            int col = index % mazeRows;
+            
+            Vector2 position = direction switch
+            {
+                Direction.South => new Vector3(row * emptySpace, col * emptySpace - emptySpace / 2 + wallThickness / 2),
+                Direction.West => new Vector3(row * emptySpace - emptySpace / 2 + wallThickness / 2, col * emptySpace),
+                Direction.East => new Vector3(row * emptySpace + emptySpace / 2 - wallThickness / 2, col * emptySpace),
+                Direction.North => new Vector3(row * emptySpace, col * emptySpace + emptySpace / 2 - wallThickness / 2),
+                _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
+            };
+            return position;
+        }
+
+        private Vector3 GetWallScale(Direction direction)
+        {
+            Vector2 scale = direction switch
+            {
+                Direction.North or Direction.South => new Vector3(emptySpace, wallThickness, -0.1f),
+                Direction.East or Direction.West => new Vector3(wallThickness, emptySpace, -0.1f),
+                _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
+            };
+            return scale;
+        }
+
+        private GameObject PlaceWall(Vector2 cellPosition, Direction direction, Direction wallFlag, Transform parent)
+        {
+            Vector2 position = direction switch
+            {
+                Direction.South => new Vector2(cellPosition.x, cellPosition.y),
+                Direction.West => new Vector2(cellPosition.x, cellPosition.y),
+                Direction.East => new Vector2(cellPosition.x + emptySpace - wallThickness, cellPosition.y),
+                Direction.North => new Vector2(cellPosition.x, cellPosition.y + emptySpace - wallThickness),
+                _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
+            };
+
+            Vector2 scale = direction switch
+            {
+                Direction.North or Direction.South => new Vector2(emptySpace, wallThickness),
+                Direction.East or Direction.West => new Vector2(wallThickness, emptySpace),
+                _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
+            };
+
+            GameObject wall = Instantiate(instanceDrawSettings.WallObject, position, Quaternion.identity);
+            wall.transform.localScale = scale;
+            wall.transform.SetParent(parent, true);
+            wall.SetActive(wallFlag.HasFlag(direction));
+            wall.name = $"{parent.name} {direction}";
+            return wall;
+        }
+
+        private void UpdateWallDirection(int index, Direction direction, Direction wallFlag)
+        {
+            if (drawMode == DrawMode.Instance)
+            {
+                var cellView = cellViews[index];
+                GameObject gameObject = cellView.walls[Array.IndexOf(Enum.GetValues(direction.GetType()), direction)];
+                gameObject.SetActive(wallFlag.HasFlag(direction));
+            }
+            else
+            {
+                // get the wall and just make it invisible?
+                int directionIndex = Array.IndexOf(Enum.GetValues(direction.GetType()), direction);
+                int wallIndex = mazeRows * mazeColumns + index * 4 + directionIndex;
+                if (!wallFlag.HasFlag(direction) && meshProperties[wallIndex].Color != Vector4.zero)
+                {
+                    meshProperties[wallIndex].Color = Vector4.zero;
+                    if (latestWallUpdate1 >= 0) latestWallUpdate2 = wallIndex;
+                    else latestWallUpdate1 = wallIndex;
+                }
+            }
+        }
+
+        public class UnityRandom : IRandom
+        {
+            public int Range(int exclusiveMax)
+            {
+                return UnityEngine.Random.Range(0, exclusiveMax);
+            }
+
+            public int Range(int inclusiveMin, int exclusiveMax)
+            {
+                return UnityEngine.Random.Range(inclusiveMin, exclusiveMax);
+            }
         }
     }
 }

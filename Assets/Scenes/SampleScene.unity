@@ -419,12 +419,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   camera: {fileID: 519420031}
-  wallObject: {fileID: 1559882385949856523, guid: a211a7bf874b1f54da610b2671453c82, type: 3}
-  backgroundObject: {fileID: 1559882385949856523, guid: f745ec086b283c34fb19f8bcbbda6d24, type: 3}
+  drawMode: 1
+  gpuDrawSettings:
+    Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
+    Material: {fileID: 2100000, guid: 5ba4b31216613d144b27eba589f25c57, type: 2}
+  instanceDrawSettings:
+    WallObject: {fileID: 0}
+    BackgroundObject: {fileID: 0}
   emptySpace: 1
   wallThickness: 0.1
-  mazeColumns: 170
-  mazeRows: 170
-  slowGenerate: 0
-  generateDelay: 0.001
+  mazeColumns: 1000
+  mazeRows: 1000
+  slowGenerate: 1
+  generateDelay: 0
+  stepsPerUpdate: 1
+  defaultGroundColor: {r: 1, g: 0, b: 0, a: 1}
+  currentGroundColor: {r: 0, g: 1, b: 1, a: 1}
+  visitedGroundColor: {r: 1, g: 0, b: 1, a: 1}
+  wallColor: {r: 1, g: 1, b: 1, a: 1}
   generateStep: 0
