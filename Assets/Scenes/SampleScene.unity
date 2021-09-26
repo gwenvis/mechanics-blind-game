@@ -419,17 +419,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   camera: {fileID: 519420031}
-  drawMode: 1
+  drawMode: 0
   gpuDrawSettings:
     Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
     Material: {fileID: 2100000, guid: 5ba4b31216613d144b27eba589f25c57, type: 2}
   instanceDrawSettings:
-    WallObject: {fileID: 0}
-    BackgroundObject: {fileID: 0}
+    WallObject: {fileID: 1559882385949856523, guid: a211a7bf874b1f54da610b2671453c82, type: 3}
+    BackgroundObject: {fileID: 1559882385949856523, guid: f745ec086b283c34fb19f8bcbbda6d24, type: 3}
   emptySpace: 1
   wallThickness: 0.1
-  mazeColumns: 1000
-  mazeRows: 1000
+  mazeColumns: 10
+  mazeRows: 10
   slowGenerate: 1
   generateDelay: 0
   stepsPerUpdate: 1

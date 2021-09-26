@@ -153,8 +153,8 @@ namespace QTea
             }
         }
 
-        private int GetIndex(int row, int col) => (row * columns) + col;
-        private (int row, int col) GetPosition(int index) => (index / columns, index % columns);
+        private int GetIndex(int row, int col) => row + col * rows;
+        private (int row, int col) GetPosition(int index) => (index % rows, index / rows);
 
         /// <summary>
         /// Get cells in the order of NESW

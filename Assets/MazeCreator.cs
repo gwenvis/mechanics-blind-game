@@ -65,6 +65,8 @@ namespace QTea
         }
 
         [SerializeField] private new Camera camera;
+        [SerializeField] private bool followCurrentCell;
+        [SerializeField, ShowIf("followCurrentCell")] private float zoomLevel;
         [SerializeField] private DrawMode drawMode = DrawMode.GPUInstance;
 
         [SerializeField, TitleGroup("GPU Instance Drawing Settings")]
@@ -162,14 +164,35 @@ namespace QTea
         private void Update()
         {
             if (drawMode == DrawMode.GPUInstance && generateState >= 0) DrawGPUInstanced();
+            float zoomLerpSpeed = 10f;
+            float positionLerpSpeed = 2.5f;
+
+            if (followCurrentCell && generateState == 3 && camera)
+            {
+                Vector3 wantedPosition = new Vector3(currentCell % mazeRows, currentCell / mazeRows,
+                    camera.transform.position.z);
+                camera.orthographicSize = Mathf.Lerp(camera.orthographicSize, zoomLevel, zoomLerpSpeed * Time.deltaTime);
+                camera.transform.position =
+                    Vector3.Lerp(camera.transform.position, wantedPosition, positionLerpSpeed * Time.deltaTime);
+            }
+            else if (followCurrentCell && generateState != 3 && generateState != -1 && camera)
+            {
+                Vector3 wantedPosition = camera.transform.position;
+                wantedPosition.x = mazeRows * emptySpace / 2;
+                wantedPosition.y = mazeColumns * emptySpace / 2 - emptySpace / 2;
+                camera.orthographicSize = Mathf.Lerp(camera.orthographicSize, wantedPosition.y + emptySpace / 2, zoomLerpSpeed * Time.deltaTime);
+                camera.transform.position = 
+                    Vector3.Lerp(camera.transform.position, wantedPosition, positionLerpSpeed * Time.deltaTime);
+
+            }
         }
 
         private void DrawGPUInstanced()
         {
+            Vector3 bounds = new Vector3(mazeRows * emptySpace, mazeRows * emptySpace, 1f);
             Graphics.DrawMeshInstancedIndirect(gpuDrawSettings.Mesh, 0, 
                 gpuDrawSettings.Material, 
-                new Bounds(Vector3.zero, 
-                    new Vector3(mazeRows * emptySpace, mazeRows * emptySpace, 1f)), 
+                new Bounds(Vector3.zero, bounds * 4), 
                 argsBuffer);
         }
 
@@ -209,8 +232,8 @@ namespace QTea
                 meshProperties[j].Color = defaultGroundColor;
                 meshProperties[j].Mat = new Matrix4x4();
                 float pos = emptySpace * j;
-                float xPos = j / rows * emptySpace;
-                float yPos = j % rows * emptySpace;
+                float xPos = j % rows * emptySpace;
+                float yPos = j / rows * emptySpace;
                 meshProperties[j].Mat.SetTRS(
                     new Vector3(xPos, yPos, 0), 
                     Quaternion.identity, 
@@ -242,8 +265,8 @@ namespace QTea
             int length = columns * rows;
             for (int i = 0; i < length; i++)
             {
-                int r = i / rows;
-                int c = i % rows;
+                int r = i % rows;
+                int c = i / rows;
                 Vector2 cellPosition = new Vector2(r * emptySpace, c * emptySpace);
                 Direction[] directions = (Direction[])Enum.GetValues(typeof(Direction));
 
@@ -251,13 +274,13 @@ namespace QTea
 
                 GameObject backGround = Instantiate(instanceDrawSettings.BackgroundObject, transform);
                 backGround.transform.position = new Vector3(cellPosition.x, cellPosition.y, 0.1f);
-                backGround.name = $"(r{r}, c{r})";
+                backGround.name = $"(r{r}, c{c})";
 
                 for (int index = 0; index < directions.Length; index++)
                 {
                     Direction direction = directions[index];
                     wallObjects[index] =
-                        PlaceWall(cellPosition, direction, (Direction)0b1111, backGround.transform);
+                        PlaceWall(i, direction, (Direction)0b1111, backGround.transform);
                 }
 
                 cellViews[i] = new(wallObjects, backGround);
@@ -271,8 +294,11 @@ namespace QTea
                 UpdateWall(maze.MazeCells[i], i);
             }
 
-            meshPropertiesBuffer.SetData(meshProperties);
-            gpuDrawSettings.Material.SetBuffer(Properties, meshPropertiesBuffer);
+            if (meshProperties != null)
+            {
+                meshPropertiesBuffer.SetData(meshProperties);
+                gpuDrawSettings.Material.SetBuffer(Properties, meshPropertiesBuffer);
+            }
         }
 
         private void UpdateWall(Cell cell, int index)
@@ -340,7 +366,7 @@ namespace QTea
 
         private void UpdateIndex(int index)
         {
-            if (index == -1) return;
+            if (index == -1 || meshPropertiesBuffer == null) return;
             
             var a = meshPropertiesBuffer.BeginWrite<MeshProperties>(index, 1);
             a[0] = meshProperties[index];
@@ -375,7 +401,7 @@ namespace QTea
 #if UNITY_EDITOR
         [ShowIf("@slowGenerate && generateState == 0 && UnityEngine.Application.isPlaying")]
 #else
-    [ShowIf("@slowGenerate && generateState == 0")]
+        [ShowIf("@slowGenerate && generateState == 0")]
 #endif
         [Button(ButtonSizes.Small)]
         private void StartGenerate()
@@ -404,8 +430,8 @@ namespace QTea
 
         private Vector3 GetWallPosition(int index, Direction direction)
         {
-            int row = index / mazeRows;
-            int col = index % mazeRows;
+            int row = index % mazeRows;
+            int col = index / mazeRows;
             
             Vector2 position = direction switch
             {
@@ -429,23 +455,10 @@ namespace QTea
             return scale;
         }
 
-        private GameObject PlaceWall(Vector2 cellPosition, Direction direction, Direction wallFlag, Transform parent)
+        private GameObject PlaceWall(int index, Direction direction, Direction wallFlag, Transform parent)
         {
-            Vector2 position = direction switch
-            {
-                Direction.South => new Vector2(cellPosition.x, cellPosition.y),
-                Direction.West => new Vector2(cellPosition.x, cellPosition.y),
-                Direction.East => new Vector2(cellPosition.x + emptySpace - wallThickness, cellPosition.y),
-                Direction.North => new Vector2(cellPosition.x, cellPosition.y + emptySpace - wallThickness),
-                _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
-            };
-
-            Vector2 scale = direction switch
-            {
-                Direction.North or Direction.South => new Vector2(emptySpace, wallThickness),
-                Direction.East or Direction.West => new Vector2(wallThickness, emptySpace),
-                _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
-            };
+            Vector2 position = GetWallPosition(index, direction);
+            Vector2 scale = GetWallScale(direction);
 
             GameObject wall = Instantiate(instanceDrawSettings.WallObject, position, Quaternion.identity);
             wall.transform.localScale = scale;
