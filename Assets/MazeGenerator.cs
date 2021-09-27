@@ -28,7 +28,7 @@ namespace QTea
         private bool slowGenerate = false;
         private SlowGenerateData slowGenerateData;
 
-        private readonly Dictionary<Direction, Direction> opposites = new()
+        private readonly Dictionary<Direction, Direction> opposites = new Dictionary<Direction, Direction>()
         {
             {Direction.North, Direction.South}, {Direction.South, Direction.North},
             {Direction.East, Direction.West}, {Direction.West, Direction.East}
@@ -60,7 +60,7 @@ namespace QTea
                 throw new Exception("no");
             }
             
-            Stack<int> visitedCells = new();
+            Stack<int> visitedCells = new Stack<int>();
 
             int currentCell = GetIndex(0, entrance);
             bool done = false;
@@ -74,7 +74,7 @@ namespace QTea
                 currentLoop++;
             }
 
-            return new(cells, columns, rows, true, currentLoop);
+            return new Maze(cells, columns, rows, true, currentLoop);
         }
 
         /// <summary>
@@ -83,7 +83,7 @@ namespace QTea
         /// <param name="mazeCallback">Callback when a single step is generated</param>
         public Maze StartSlowGenerate()
         {
-            slowGenerateData = new()
+            slowGenerateData = new SlowGenerateData()
             {
                 indexStack = new Stack<int>(),
                 nextCell = GetIndex(0, entrance)
@@ -115,7 +115,7 @@ namespace QTea
             updatedCells[0] = (lastCell, cells[lastCell]);
             updatedCells[1] = (nextCell, cells[nextCell]);
 
-            return new(updatedCells, slowGenerateData.generateStep, slowGenerateData.done);
+            return new MazeUpdate(updatedCells, slowGenerateData.generateStep, slowGenerateData.done);
         }
 
         private (bool done, int nextCell) CarveGreedy(int currentCell, Stack<int> visitedCells)
@@ -279,7 +279,7 @@ namespace QTea
 
     public class SystemRandom : IRandom
     {
-        private readonly System.Random random = new();
+        private readonly System.Random random = new System.Random();
         public int Range(int exclusiveMax) => random.Next(exclusiveMax);
         public int Range(int inclusiveMin, int exclusiveMax) => random.Next(inclusiveMin, exclusiveMax);
     }

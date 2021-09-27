@@ -120,7 +120,7 @@ namespace QTea
         {
             if (!slowGenerate)
             {
-                mazeGenerator = new(mazeColumns, mazeRows, 2, 4, new UnityRandom());
+                mazeGenerator = new MazeGenerator(mazeColumns, mazeRows, 2, 4, new UnityRandom());
                 BuildMazeBase(mazeColumns, mazeRows);
                 UpdateMaze(mazeGenerator.Generate(0));
             }
@@ -130,7 +130,7 @@ namespace QTea
         [Button]
         private void InitializeMaze()
         {
-            mazeGenerator = new(mazeColumns, mazeRows, 0, 4, new UnityRandom());
+            mazeGenerator = new MazeGenerator(mazeColumns, mazeRows, 0, 4, new UnityRandom());
             BuildMazeBase(mazeColumns, mazeRows);
             generateState = 0;
         }
@@ -283,7 +283,7 @@ namespace QTea
                         PlaceWall(i, direction, (Direction)0b1111, backGround.transform);
                 }
 
-                cellViews[i] = new(wallObjects, backGround);
+                cellViews[i] = new CellView(wallObjects, backGround);
             }
         }
 
@@ -448,8 +448,10 @@ namespace QTea
         {
             Vector2 scale = direction switch
             {
-                Direction.North or Direction.South => new Vector3(emptySpace, wallThickness, -0.1f),
-                Direction.East or Direction.West => new Vector3(wallThickness, emptySpace, -0.1f),
+                Direction.North => new Vector3(emptySpace, wallThickness, -0.1f),
+                Direction.South => new Vector3(emptySpace, wallThickness, -0.1f),
+                Direction.East => new Vector3(wallThickness, emptySpace, -0.1f),
+                Direction.West => new Vector3(wallThickness, emptySpace, -0.1f),
                 _ => throw new ArgumentOutOfRangeException(nameof(direction), direction, null)
             };
             return scale;
