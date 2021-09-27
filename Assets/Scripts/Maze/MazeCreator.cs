@@ -487,8 +487,8 @@ namespace QTea
             GameObject wall = Instantiate(instanceDrawSettings.WallObject, position, Quaternion.identity);
             wall.transform.localScale = scale;
             wall.transform.SetParent(parent, true);
-            wall.SetActive(wallFlag.HasFlag(direction));
             wall.name = $"{parent.name} {direction}";
+            if (!wallFlag.HasFlag(direction)) Destroy(wall);
             return wall;
         }
 
@@ -498,7 +498,7 @@ namespace QTea
             {
                 var cellView = cellViews[index];
                 GameObject gameObject = cellView.walls[Array.IndexOf(Enum.GetValues(direction.GetType()), direction)];
-                gameObject.SetActive(wallFlag.HasFlag(direction));
+                if (!wallFlag.HasFlag(direction)) Destroy(gameObject);
             }
             else
             {
