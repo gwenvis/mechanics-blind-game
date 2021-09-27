@@ -77,6 +77,7 @@ namespace SteamAudio
         {
             get
             {
+                if(sSingleton == null) AutoInitialize();
                 return sSingleton.mContext;
             }
         }
@@ -1212,7 +1213,7 @@ namespace SteamAudio
 #endif
         static void AutoInitialize()
         {
-            Initialize(ManagerInitReason.Playing);
+            if(sSingleton == null) Initialize(ManagerInitReason.Playing);
         }
 
         // Exports the static geometry in a scene.
