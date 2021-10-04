@@ -9,10 +9,10 @@ public class PlayerSpawner : MonoBehaviour
         Player,
         Enemy
     }
-    
+
     [SerializeField] private float zOffset;
     [SerializeField] private SpawnerType spawnerType = SpawnerType.Player;
-    
+
     /// <summary>
     /// Places the position on the entrance of the maze.
     /// </summary>

@@ -4,53 +4,75 @@ using System.Collections.Generic;
 using QTea;
 using QTea.MazeGeneration;
 using UnityEngine;
+using UnityEngine.Events;
+using Random = UnityEngine.Random;
 
 public class EnemyPathFinder : MonoBehaviour
 {
-    [SerializeField] private Transform player;
-    
-    private bool mazeImported = false;
-    private Maze maze;
-    private Path<Vector2Int> path;
+    public UnityEvent<Path<Vector2Int>> _pathGeneratedEvent;
+
+    [SerializeField] private Transform _player;
+
+    private bool _mazeImported = false;
+    private Maze _maze;
+    private Path<Vector2Int> _path;
+    private Vector2Int _start;
+    private Vector2Int _end;
 
     public void ImportMaze(MazeController.GeneratedMaze generatedMaze)
     {
-        mazeImported = true;
-        maze = generatedMaze.Maze;
+        _mazeImported = true;
+        _maze = generatedMaze.Maze;
     }
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.P) && mazeImported)
+        if (_path.Count > 1)
         {
-            Vector2 enemyPos = transform.position;
-            Vector2 playerPos = player.position;
-            Vector2Int start = new Vector2Int(Mathf.FloorToInt(enemyPos.x), Mathf.FloorToInt(enemyPos.y));
-            Vector2Int end = new Vector2Int(Mathf.FloorToInt(playerPos.x), Mathf.FloorToInt(playerPos.y));
-            path = Solver.Solve(maze, start, end, 10000);
+            Vector2Int previous = _path.Next();
 
-            if (path.Count == 1)
-            {
-                Debug.LogError("Generated a maze with 1 path");
-            }
-        }
-
-        if (path.Count > 1)
-        {
-            Vector2Int previous = path.Next();
-            
             while (true)
             {
-                if (!path.TryNext(out Vector2Int pos))
-                {
-                    break;
-                }
+                if (!_path.TryNext(out Vector2Int pos)) break;
 
                 Debug.DrawLine((Vector2)previous, (Vector2)pos, Color.magenta, Time.deltaTime, false);
                 previous = pos;
             }
 
-            path.Reset();
+            _path.Reset();
         }
+    }
+
+    public Path<Vector2Int> GetRandomPath()
+    {
+        // set a random path
+        Vector2Int start = GetFromVector(transform.position);
+        var randomEnd = new Vector2Int(Random.Range(0, _maze.Rows), Random.Range(0, _maze.Columns));
+        var newPath = _maze.Solve(start, randomEnd);
+        _path = newPath.Clone();
+        this._start = start;
+        _end = randomEnd;
+        return newPath;
+    }
+
+    public Path<Vector2Int> GetPathTo(Vector2Int end)
+    {
+        Vector2Int start = GetFromVector(transform.position);
+        var newPath = _maze.Solve(start, end);
+        _path = newPath.Clone();
+        _start = start;
+        _end = end;
+        return newPath;
+    }
+
+    private Vector2Int GetFromVector(Vector2 vector)
+    {
+        return new Vector2Int(Mathf.FloorToInt(vector.x + 0.5f), Mathf.FloorToInt(vector.y + 0.5f));
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.DrawWireSphere((Vector2)_start, 0.5f);
+        Gizmos.DrawWireSphere((Vector2)_end, 0.5f);
     }
 }

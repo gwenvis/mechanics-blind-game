@@ -17,7 +17,7 @@ namespace QTea
             internal bool done;
             internal int generateStep;
         }
-        
+
         private readonly int columns;
         private readonly int rows;
         private readonly int entrance;
@@ -31,8 +31,8 @@ namespace QTea
 
         private readonly Dictionary<Direction, Direction> opposites = new Dictionary<Direction, Direction>()
         {
-            {Direction.North, Direction.South}, {Direction.South, Direction.North},
-            {Direction.East, Direction.West}, {Direction.West, Direction.East}
+            { Direction.North, Direction.South }, { Direction.South, Direction.North },
+            { Direction.East, Direction.West }, { Direction.West, Direction.East }
         };
 
         public MazeGenerator(int columns, int rows, int entrance, int exit, IRandom random, int removeWalls = 0)
@@ -44,7 +44,7 @@ namespace QTea
             this.removeWalls = removeWalls;
             this.random = random;
 
-            Cell[] cells = new Cell[columns * rows];
+            var cells = new Cell[columns * rows];
             InitializeArray(ref cells);
             this.cells = cells;
         }
@@ -56,12 +56,9 @@ namespace QTea
         /// <returns></returns>
         public Maze Generate(int maxLoop = 50_000)
         {
-            if (slowGenerate)
-            {
-                throw new Exception("no");
-            }
-            
-            Stack<int> visitedCells = new Stack<int>();
+            if (slowGenerate) throw new Exception("no");
+
+            var visitedCells = new Stack<int>();
 
             int currentCell = GetIndex(0, entrance);
             bool done = false;
@@ -69,7 +66,7 @@ namespace QTea
 
             while (!done)
             {
-                var result = CarveGreedy(currentCell, visitedCells);
+                (bool done, int nextCell) result = CarveGreedy(currentCell, visitedCells);
                 done = maxLoop == 0 ? result.done : currentLoop > maxLoop || result.done;
                 currentCell = result.nextCell;
                 currentLoop++;
@@ -82,7 +79,7 @@ namespace QTea
 
         private void RemoveWallsPhase()
         {
-            Direction[] directions = (Direction[]) Enum.GetValues(typeof(Direction));
+            var directions = (Direction[])Enum.GetValues(typeof(Direction));
             for (int i = 0; i < removeWalls; i++)
             {
                 int attempts = 10;
@@ -92,9 +89,9 @@ namespace QTea
                     int randomIndex = random.Range(0, cells.Length);
                     // dont remove the edges
                     (int row, int col) = GetPosition(randomIndex);
-                    
+
                     if (row == 0 || col == 0 || col == columns - 1 || row == rows - 1) continue;
-                    
+
                     // get a random direction that still has a wall.
                     Direction direction = directions[random.Range(directions.Length)];
                     if (!cells[randomIndex].Walls.HasFlag(direction)) continue;
@@ -126,13 +123,8 @@ namespace QTea
         public MazeUpdate NextSlowGenerate()
         {
             if (!slowGenerate)
-            {
                 throw new Exception("Call StartSlowGenerate first!");
-            }
-            else if (slowGenerateData.done)
-            {
-                throw new Exception("Generation is already completed.");
-            }
+            else if (slowGenerateData.done) throw new Exception("Generation is already completed.");
 
 
             int lastCell = slowGenerateData.nextCell;
@@ -140,8 +132,8 @@ namespace QTea
             slowGenerateData.generateStep++;
             slowGenerateData.done = done;
             slowGenerateData.nextCell = nextCell;
-            
-            (int, Cell)[] updatedCells = new (int, Cell)[2];
+
+            var updatedCells = new (int, Cell)[2];
             updatedCells[0] = (lastCell, cells[lastCell]);
             updatedCells[1] = (nextCell, cells[nextCell]);
 
@@ -151,7 +143,7 @@ namespace QTea
         private (bool done, int nextCell) CarveGreedy(int currentCell, Stack<int> visitedCells)
         {
             cells[currentCell].Visited = true;
-            
+
             // get an unvisited neighbor
             (bool result, int nextCell, Direction direction) = GetUnvisitedNeighbor(currentCell);
 
@@ -177,30 +169,30 @@ namespace QTea
 
         private void InitializeArray(ref Cell[] cell)
         {
-            for (int i = 0; i < cell.Length; i++)
-            {
-                cell[i].Walls = (Direction) 0b1111;
-            }
+            for (int i = 0; i < cell.Length; i++) cell[i].Walls = (Direction)0b1111;
         }
 
-        private int GetIndex(int row, int col) => row + col * rows;
-        private (int row, int col) GetPosition(int index) => (index % rows, index / rows);
+        private int GetIndex(int row, int col)
+        {
+            return row + col * rows;
+        }
+
+        private (int row, int col) GetPosition(int index)
+        {
+            return (index % rows, index / rows);
+        }
 
         /// <summary>
         /// Get cells in the order of NESW
         /// </summary>
         public (bool exists, int index, Direction direction)[] GetRelativeCells(int index)
         {
-            Direction[] directions = (Direction[]) Enum.GetValues(typeof(Direction));
-            (bool, int, Direction)[] relativeCells = new (bool, int, Direction)[4];
+            var directions = (Direction[])Enum.GetValues(typeof(Direction));
+            var relativeCells = new (bool, int, Direction)[4];
 
             for (int i = 0; i < directions.Length; i++)
-            {
                 if (GetRelativeCell(index, directions[i], out int cellIndex))
-                {
                     relativeCells[i] = (true, cellIndex, directions[i]);
-                }
-            }
 
             return relativeCells;
         }
@@ -309,8 +301,16 @@ namespace QTea
 
     public class SystemRandom : IRandom
     {
-        private readonly System.Random random = new System.Random();
-        public int Range(int exclusiveMax) => random.Next(exclusiveMax);
-        public int Range(int inclusiveMin, int exclusiveMax) => random.Next(inclusiveMin, exclusiveMax);
+        private readonly Random random = new Random();
+
+        public int Range(int exclusiveMax)
+        {
+            return random.Next(exclusiveMax);
+        }
+
+        public int Range(int inclusiveMin, int exclusiveMax)
+        {
+            return random.Next(inclusiveMin, exclusiveMax);
+        }
     }
 }

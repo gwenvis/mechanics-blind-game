@@ -9,62 +9,70 @@
             Open,
             Closed
         }
-        
+
         private struct Node
         {
             /// <summary>
-            /// Previous node. Null if start node.
+            /// Previous node index. Null if start node.
             /// </summary>
-            public Node? Parent;
-            
+            public int ParentIndex;
+
             /// <summary>
             /// The current state of the node.
             /// </summary>
             public NodeState State;
-            
+
             /// <summary>
             /// Location of the node
             /// </summary>
             public readonly int Index;
 
             /// <summary>
-            /// Is this node walkable?
+            /// The walls this node has
             /// </summary>
-            public readonly bool Walkable;
-            
+            public readonly Direction Walls;
+
             /// <summary>
             /// Movement cost to from from the starting point to here
             /// </summary>
-            public readonly float G;
-            
+            public readonly int G;
+
             /// <summary>
             /// Guesstimate from given spot to the final destination
             /// </summary>
-            public readonly float H;
+            public readonly int H;
 
             /// <summary>
             /// Total cost
             /// </summary>
-            public readonly float F;
+            public int F => G + H;
 
-            public Node(Node? parent, bool walkable, int index, float g, float h)
+            private readonly UnityEngine.Vector2Int _pos;
+
+            public Node(int parentIndex, Direction walls, int index, int g, int h)
             {
                 Index = index;
                 G = g;
                 H = h;
-                F = G + H;
                 State = NodeState.None;
-                Walkable = walkable;
-                Parent = parent;
+                Walls = walls;
+                ParentIndex = parentIndex;
+                _pos = new UnityEngine.Vector2Int(Index % 8, Index / 8);
+            }
+
+            public Node ChangeParent(int parent, int g, int h)
+            {
+                return new Node(parent, Walls, Index, g, h)
+                {
+                    State = State
+                };
             }
 
             public override bool Equals(object obj)
             {
                 if (obj is Node node)
-                {
-                    return Index == node.Index && 
+                    return Index == node.Index &&
                            State != NodeState.Null && node.State != NodeState.Null;
-                }
 
                 return false;
             }

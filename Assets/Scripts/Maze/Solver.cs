@@ -5,17 +5,17 @@ using UnityEngine;
 
 namespace QTea.MazeGeneration
 {
-    public static partial class Solver 
+    public static partial class Solver
     {
-        public static Path<Vector2Int> Solve(Maze maze, Vector2Int start, Vector2Int end, int limit)
+        public static Path<Vector2Int> Solve(this Maze maze, Vector2Int start, Vector2Int end, int limit = 10_000)
         {
             Node[] world = new Node[maze.Columns * maze.Rows];
             var path = new SimplePriorityQueue<Node>(new NodeComparer());
 
             int rows = maze.Rows;
             int currentIndex = GetIndex(start, rows);
-            var startingNode = new Node(null, true, currentIndex, 0, GuessCost(start, end));
-            
+            var startingNode = new Node(-1, maze.MazeCells[currentIndex].Walls, currentIndex, 0, GuessCost(start, end));
+
             path.Push(startingNode);
             world[currentIndex] = startingNode;
 
@@ -25,17 +25,19 @@ namespace QTea.MazeGeneration
             {
                 if (walkedAmount > limit)
                 {
-                    return new Path<Vector2Int>(new[] { start }, 1);
+                    Debug.Log("walkedAmount over limit");
+                    return new Path<Vector2Int>(new[] { start });
                 }
-                
-                Node currentNode = path.Pop();
-                currentNode.State = NodeState.Closed;
+
+                Node currentNode = world[path.Pop().Index];
+                world[currentNode.Index].State = NodeState.Closed;
 
                 if (GetPosition(currentNode.Index, rows) == end)
                 {
-                    return BuildPath(currentNode, rows);
+                    return BuildPath(currentNode, world, rows);
                 }
-                
+
+                var pos = GetPosition(currentNode.Index, rows);
                 // get all neighbors
                 Node[] walkableNeighbors = GetWalkableAdjacentNodes(maze, world, currentNode, end);
                 if (walkableNeighbors == null) continue;
@@ -43,42 +45,49 @@ namespace QTea.MazeGeneration
 
                 foreach (Node candidate in walkableNeighbors)
                 {
-                    switch (candidate.State)
+                    if (candidate.State != NodeState.None)
                     {
-                        case NodeState.Closed:
-                            continue;
-                        case NodeState.None:
-                            world[candidate.Index].State = NodeState.Open;
-                            path.Push(candidate);
-                            break;
-                        default:
-                            continue;
+                        if (candidate.State == NodeState.Open)
+                        {
+                            if (candidate.ParentIndex != currentNode.Index)
+                            {
+                                world[candidate.Index] = world[candidate.Index].ChangeParent(currentNode.Index,
+                                    currentNode.G + 1, GuessCost(pos, GetPosition(candidate.Index, rows)));
+                            }
+                        }
+
+                        continue;
                     }
+
+                    world[candidate.Index].State = NodeState.Open;
+
+                    path.Push(candidate);
                 }
 
                 walkedAmount++;
             }
-            
+
+            Debug.Log("Couldn't find a path");
             return new Path<Vector2Int>(new[] { start }, 1);
         }
 
-        private static Path<Vector2Int> BuildPath(Node startNode, int rows)
+        private static Path<Vector2Int> BuildPath(Node startNode, Node[] world, int rows)
         {
             var path = new Stack<Vector2Int>();
             Node currentNode = startNode;
             path.Push(GetPosition(currentNode.Index, rows));
-            
+
             do
             {
-                currentNode = currentNode.Parent.Value;
+                currentNode = world[currentNode.ParentIndex];
                 path.Push(GetPosition(currentNode.Index, rows));
-                
-            } while (currentNode.Parent.HasValue);
+            } while (currentNode.ParentIndex != -1);
 
             return new Path<Vector2Int>(path, path.Count);
         }
 
-#region Helper Functions
+        #region Helper Functions
+
         private static Vector2Int OffsetPosition(Vector2Int input, Direction direction) => direction switch
         {
             Direction.North => new Vector2Int(input.x, input.y + 1),
@@ -93,15 +102,9 @@ namespace QTea.MazeGeneration
 
         private static Node[] GetWalkableAdjacentNodes(Maze maze, Node[] world, Node current, Vector2Int end)
         {
-            Node[] nodes = GetAdjacentNodes(maze, world, current, end);
-            return nodes.Where(x => x.Walkable).ToArray();
-        }
-        
-        private static Node[] GetAdjacentNodes(Maze maze, Node[] world, Node current, Vector2Int end)
-        {
             int rows = maze.Rows;
             Vector2Int position = GetPosition(current.Index, rows);
-                
+
             Node? GetNeighborNode(Direction direction)
             {
                 Vector2Int offset = OffsetPosition(position, direction);
@@ -111,32 +114,39 @@ namespace QTea.MazeGeneration
                 {
                     return world[index];
                 }
-                
-                Node newNode = new Node(current, !maze.MazeCells[current.Index].Walls.HasFlag(direction), index,
+
+                Node newNode = new Node(current.Index, maze.MazeCells[index].Walls, index,
                     current.G + 1, GuessCost(offset, end));
-                world[index] = newNode;
                 return newNode;
             }
 
-            void TryAdd(Node? node, List<Node> list)
+            void TryAdd(Direction direction, List<Node> list)
             {
-                if (node.HasValue) list.Add(node.Value);
+                Node? node = GetNeighborNode(direction);
+                bool walkable = !current.Walls.HasFlag(direction);
+                if (node.HasValue && walkable)
+                {
+                    list.Add((node.Value));
+                    world[node.Value.Index] = node.Value;
+                }
             }
 
             var nodes = new List<Node>();
-            TryAdd(GetNeighborNode(Direction.North), nodes);
-            TryAdd(GetNeighborNode(Direction.East), nodes);
-            TryAdd(GetNeighborNode(Direction.South), nodes);
-            TryAdd(GetNeighborNode(Direction.West), nodes);
+            TryAdd(Direction.North, nodes);
+            TryAdd(Direction.East, nodes);
+            TryAdd(Direction.South, nodes);
+            TryAdd(Direction.West, nodes);
             return nodes.ToArray();
         }
 
         private static Vector2Int GetPosition(int index, int rows) => new Vector2Int(index % rows, index / rows);
         private static int GetIndex(int x, int y, int rows) => y * rows + x;
         private static int GetIndex(Vector2Int pos, int rows) => GetIndex(pos.x, pos.y, rows);
-        private static int GuessCost(Vector2Int start, Vector2Int end) => 
+
+        private static int GuessCost(Vector2Int start, Vector2Int end) =>
             Mathf.Abs(end.x - start.x) + Mathf.Abs(end.y - start.y);
-#endregion
+
+        #endregion
 
 
         private class NodeComparer : IComparer<Node>
@@ -165,7 +175,7 @@ namespace QTea.MazeGeneration
         {
             int count = Count;
             elements.Add(element);
-            
+
             if (count == 0)
             {
                 return;

@@ -25,7 +25,7 @@ public class MazeController : MonoBehaviour
             Rows = rows;
         }
     }
-    
+
     [SerializeField] private UnityEvent<GeneratedMaze> mazeCompletedAction;
 
     [SerializeField] private int rows;
@@ -34,17 +34,17 @@ public class MazeController : MonoBehaviour
 
     private void Start()
     {
-        MazeCreator.UnityRandom random = new MazeCreator.UnityRandom();
-        int entrance = random.Range(columns-1);
-        int exit = random.Range(columns-1);
-        MazeGenerator mazeGenerator =
-            new MazeGenerator(columns, rows, 
+        var random = new MazeCreator.UnityRandom();
+        int entrance = random.Range(columns - 1);
+        int exit = random.Range(columns - 1);
+        var mazeGenerator =
+            new MazeGenerator(columns, rows,
                 entrance, exit,
                 random, removeWalls);
 
         Maze maze = mazeGenerator.Generate(0);
 
-        GeneratedMaze generatedMaze = new GeneratedMaze(maze, entrance, exit, columns, rows);
+        var generatedMaze = new GeneratedMaze(maze, entrance, exit, columns, rows);
         mazeCompletedAction?.Invoke(generatedMaze);
     }
 }

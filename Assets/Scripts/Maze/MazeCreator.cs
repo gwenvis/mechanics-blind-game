@@ -12,11 +12,12 @@ namespace QTea
 {
     public class MazeCreator : MonoBehaviour
     {
-#region Structs
+        #region Structs
+
         private enum DrawMode
         {
-           Instance,
-           GPUInstance
+            Instance,
+            GPUInstance
         }
 
         private struct GPUBatch
@@ -39,20 +40,20 @@ namespace QTea
             [SerializeField] internal Mesh Mesh;
             [SerializeField] internal Material Material;
         }
-        
+
         private struct CellView
         {
             internal readonly IReadOnlyList<GameObject> walls;
             internal readonly GameObject background;
             internal bool Visited;
-            internal int GPUWalls; 
+            internal int GPUWalls;
 
             private SpriteRenderer spriteRenderer;
 
             internal void SetImage(Color color)
             {
                 if (!spriteRenderer) spriteRenderer = background.GetComponentInChildren<SpriteRenderer>();
-                if(spriteRenderer) spriteRenderer.color = color;
+                if (spriteRenderer) spriteRenderer.color = color;
             }
 
             public CellView(IReadOnlyList<GameObject> walls, GameObject background)
@@ -64,18 +65,21 @@ namespace QTea
                 GPUWalls = 0b1111;
             }
         }
-#endregion
+
+        #endregion
+
         [SerializeField] private new Camera camera;
         [SerializeField] private bool followCurrentCell;
-        [SerializeField, ShowIf("followCurrentCell")] private float zoomLevel;
+        [SerializeField] [ShowIf("followCurrentCell")]
+        private float zoomLevel;
         [SerializeField] private DrawMode drawMode = DrawMode.GPUInstance;
 
-        [SerializeField, TitleGroup("GPU Instance Drawing Settings")]
-        [ShowIf("@drawMode == DrawMode.GPUInstance"), HideLabel]
+        [SerializeField] [TitleGroup("GPU Instance Drawing Settings")]
+        [ShowIf("@drawMode == DrawMode.GPUInstance")] [HideLabel]
         private GPUDrawModeSettings gpuDrawSettings;
 
-        [SerializeField, TitleGroup("Instance Drawing Settings")]
-        [ShowIf("@drawMode == DrawMode.Instance"), HideLabel]
+        [SerializeField] [TitleGroup("Instance Drawing Settings")]
+        [ShowIf("@drawMode == DrawMode.Instance")] [HideLabel]
         private InitializeDrawModeSettings instanceDrawSettings;
 
         [Title("Maze Settings")] [SerializeField]
@@ -83,16 +87,16 @@ namespace QTea
         [SerializeField] private float emptySpace = 1.0f;
         [SerializeField] private float wallThickness = 0.1f;
         [HideIf("dontSelfGenerate")]
-        [SerializeField, HorizontalGroup] private int mazeColumns = 7, mazeRows = 7;
+        [SerializeField] [HorizontalGroup] private int mazeColumns = 7, mazeRows = 7;
         [HideIf("dontSelfGenerate")]
-        [SerializeField, MinValue(0)] private int removeWallAmount = 0;
+        [SerializeField] [MinValue(0)] private int removeWallAmount = 0;
         [HideIf("dontSelfGenerate")]
         [SerializeField] private bool slowGenerate;
         [HideIf("dontSelfGenerate")]
-        [SerializeField, ShowIf("slowGenerate"), MinValue(0.0)]
+        [SerializeField] [ShowIf("slowGenerate")] [MinValue(0.0)]
         private float generateDelay = 0.2f;
         [HideIf("dontSelfGenerate")]
-        [SerializeField, ShowIf("slowGenerate"), MinValue(1)]
+        [SerializeField] [ShowIf("slowGenerate")] [MinValue(1)]
         private int stepsPerUpdate = 1;
 
         [Title("Colours")]
@@ -106,7 +110,7 @@ namespace QTea
 
         private int generateState = -1;
 
-        [ReadOnly, SerializeField]
+        [ReadOnly] [SerializeField]
         private int generateStep = 0;
 
         private CellView[] cellViews;
@@ -188,9 +192,10 @@ namespace QTea
 
             if (followCurrentCell && generateState == 3 && camera)
             {
-                Vector3 wantedPosition = new Vector3(currentCell % mazeRows, currentCell / mazeRows,
+                var wantedPosition = new Vector3(currentCell % mazeRows, currentCell / mazeRows,
                     camera.transform.position.z);
-                camera.orthographicSize = Mathf.Lerp(camera.orthographicSize, zoomLevel, zoomLerpSpeed * Time.deltaTime);
+                camera.orthographicSize =
+                    Mathf.Lerp(camera.orthographicSize, zoomLevel, zoomLerpSpeed * Time.deltaTime);
                 camera.transform.position =
                     Vector3.Lerp(camera.transform.position, wantedPosition, positionLerpSpeed * Time.deltaTime);
             }
@@ -199,19 +204,19 @@ namespace QTea
                 Vector3 wantedPosition = camera.transform.position;
                 wantedPosition.x = mazeRows * emptySpace / 2;
                 wantedPosition.y = mazeColumns * emptySpace / 2 - emptySpace / 2;
-                camera.orthographicSize = Mathf.Lerp(camera.orthographicSize, wantedPosition.y + emptySpace / 2, zoomLerpSpeed * Time.deltaTime);
-                camera.transform.position = 
+                camera.orthographicSize = Mathf.Lerp(camera.orthographicSize, wantedPosition.y + emptySpace / 2,
+                    zoomLerpSpeed * Time.deltaTime);
+                camera.transform.position =
                     Vector3.Lerp(camera.transform.position, wantedPosition, positionLerpSpeed * Time.deltaTime);
-
             }
         }
 
         private void DrawGPUInstanced()
         {
-            Vector3 bounds = new Vector3(mazeRows * emptySpace, mazeRows * emptySpace, 1f);
-            Graphics.DrawMeshInstancedIndirect(gpuDrawSettings.Mesh, 0, 
-                gpuDrawSettings.Material, 
-                new Bounds(Vector3.zero, bounds * 4), 
+            var bounds = new Vector3(mazeRows * emptySpace, mazeRows * emptySpace, 1f);
+            Graphics.DrawMeshInstancedIndirect(gpuDrawSettings.Mesh, 0,
+                gpuDrawSettings.Material,
+                new Bounds(Vector3.zero, bounds * 4),
                 argsBuffer);
         }
 
@@ -244,9 +249,9 @@ namespace QTea
 
             int length = columns * rows + columns * rows * 4;
             meshProperties = new MeshProperties[length];
-            
+
             // ground
-            for (int j = 0; j < columns*rows; j ++)
+            for (int j = 0; j < columns * rows; j++)
             {
                 meshProperties[j].Color = defaultGroundColor;
                 meshProperties[j].Mat = new Matrix4x4();
@@ -254,27 +259,28 @@ namespace QTea
                 float xPos = j % rows * emptySpace;
                 float yPos = j / rows * emptySpace;
                 meshProperties[j].Mat.SetTRS(
-                    new Vector3(xPos, yPos, 0), 
-                    Quaternion.identity, 
+                    new Vector3(xPos, yPos, 0),
+                    Quaternion.identity,
                     new Vector3(emptySpace, emptySpace, 0));
             }
-            
+
             // walls
-            for (int i = 0; i < length - mazeColumns*mazeRows; i+=4)
+            for (int i = 0; i < length - mazeColumns * mazeRows; i += 4)
             {
                 int index = i + mazeColumns * mazeRows;
                 for (int j = 0; j < 4; j++)
                 {
-                    meshProperties[index+j].Color = wallColor;
-                    meshProperties[index+j].Mat = new Matrix4x4();
+                    meshProperties[index + j].Color = wallColor;
+                    meshProperties[index + j].Mat = new Matrix4x4();
 
-                    Direction dir = (Direction)(1 << j);
+                    var dir = (Direction)(1 << j);
                     Vector3 pos = GetWallPosition(i / 4, dir);
-                    meshProperties[index+j].Mat.SetTRS(pos, Quaternion.identity, GetWallScale(dir));
+                    meshProperties[index + j].Mat.SetTRS(pos, Quaternion.identity, GetWallScale(dir));
                 }
             }
 
-            meshPropertiesBuffer = new ComputeBuffer(length, MeshProperties.Size, ComputeBufferType.Default, ComputeBufferMode.SubUpdates);
+            meshPropertiesBuffer = new ComputeBuffer(length, MeshProperties.Size, ComputeBufferType.Default,
+                ComputeBufferMode.SubUpdates);
             meshPropertiesBuffer.SetData(meshProperties);
             gpuDrawSettings.Material.SetBuffer(Properties, meshPropertiesBuffer);
         }
@@ -286,10 +292,10 @@ namespace QTea
             {
                 int r = i % rows;
                 int c = i / rows;
-                Vector2 cellPosition = new Vector2(r * emptySpace, c * emptySpace);
-                Direction[] directions = (Direction[])Enum.GetValues(typeof(Direction));
+                var cellPosition = new Vector2(r * emptySpace, c * emptySpace);
+                var directions = (Direction[])Enum.GetValues(typeof(Direction));
 
-                GameObject[] wallObjects = new GameObject[4];
+                var wallObjects = new GameObject[4];
 
                 GameObject backGround = Instantiate(instanceDrawSettings.BackgroundObject, transform);
                 backGround.transform.position = new Vector3(cellPosition.x, cellPosition.y, 0.1f);
@@ -308,10 +314,7 @@ namespace QTea
 
         private void UpdateMaze(Maze maze)
         {
-            for (int i = 0; i < maze.MazeCells.Length; i++)
-            {
-                UpdateWall(maze.MazeCells[i], i);
-            }
+            for (int i = 0; i < maze.MazeCells.Length; i++) UpdateWall(maze.MazeCells[i], i);
 
             if (meshProperties != null)
             {
@@ -322,18 +325,20 @@ namespace QTea
 
         private void UpdateWall(Cell cell, int index)
         {
-            Direction[] directions = (Direction[])Enum.GetValues(typeof(Direction));
-            foreach (Direction direction in directions)
-            {
-                UpdateWallDirection(index, direction, cell.Walls);
-            }
+            var directions = (Direction[])Enum.GetValues(typeof(Direction));
+            foreach (Direction direction in directions) UpdateWallDirection(index, direction, cell.Walls);
 
             if (drawMode == DrawMode.Instance)
             {
                 if (done) cellViews[index].SetImage(defaultGroundColor);
-                
-                cellViews[index].SetImage((currentCell == index && (generateState != -1 || generateState != 1)) ? currentGroundColor :
-                    cellViews[index].Visited ? visitedGroundColor : defaultGroundColor);
+
+                cellViews[index].SetImage(currentCell == index && (generateState != -1 || generateState != 1)
+                    ?
+                    currentGroundColor
+                    :
+                    cellViews[index].Visited
+                        ? visitedGroundColor
+                        : defaultGroundColor);
             }
             else
             {
@@ -342,7 +347,7 @@ namespace QTea
                 if (latestGroundUpdate1 >= 0) latestGroundUpdate2 = index;
                 else latestGroundUpdate1 = index;
             }
-            
+
             if (currentCell == index) cellViews[index].Visited = true;
         }
 
@@ -361,15 +366,12 @@ namespace QTea
             {
                 MazeUpdate maze = mazeGenerator.NextSlowGenerate();
                 currentCell = maze.CellUpdate[1].Item1;
-                
+
                 generateStep = maze.Steps;
                 done = maze.Done;
-                
-                foreach ((int index, Cell cell) in maze.CellUpdate)
-                {
-                    UpdateWall(cell, index);
-                }
-                
+
+                foreach ((int index, Cell cell) in maze.CellUpdate) UpdateWall(cell, index);
+
                 UpdateIndex(latestWallUpdate1);
                 UpdateIndex(latestWallUpdate2);
                 UpdateIndex(latestGroundUpdate1);
@@ -389,7 +391,7 @@ namespace QTea
         private void UpdateIndex(int index)
         {
             if (index == -1 || meshPropertiesBuffer == null) return;
-            
+
             var a = meshPropertiesBuffer.BeginWrite<MeshProperties>(index, 1);
             a[0] = meshProperties[index];
             meshPropertiesBuffer.EndWrite<MeshProperties>(1);
@@ -397,7 +399,10 @@ namespace QTea
 
         [ShowIf("@slowGenerate && generateState == 1")]
         [Button(ButtonSizes.Small)]
-        private void NextGenerateStepButton() => NextGenerateStep();
+        private void NextGenerateStepButton()
+        {
+            NextGenerateStep();
+        }
 
         [ShowIf("@generateState == 3")]
         [Button(ButtonSizes.Small)]
@@ -437,15 +442,12 @@ namespace QTea
         private void Reset()
         {
             OnDisable();
-            
+
             mazeGenerator = null;
             generateState = -1;
             generateStep = 0;
 
-            for (int i = 0; i < cellViews.Length; i++)
-            {
-                Destroy(cellViews[i].background);
-            }
+            for (int i = 0; i < cellViews.Length; i++) Destroy(cellViews[i].background);
 
             cellViews = null;
         }
@@ -454,7 +456,7 @@ namespace QTea
         {
             int row = index % mazeRows;
             int col = index / mazeRows;
-            
+
             Vector2 position = direction switch
             {
                 Direction.South => new Vector3(row * emptySpace, col * emptySpace - emptySpace / 2 + wallThickness / 2),
@@ -496,7 +498,7 @@ namespace QTea
         {
             if (drawMode == DrawMode.Instance)
             {
-                var cellView = cellViews[index];
+                CellView cellView = cellViews[index];
                 GameObject gameObject = cellView.walls[Array.IndexOf(Enum.GetValues(direction.GetType()), direction)];
                 if (!wallFlag.HasFlag(direction)) Destroy(gameObject);
             }

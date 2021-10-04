@@ -6,10 +6,10 @@ namespace QTea.MazeGeneration
     public struct Path<T>
     {
         public int Count => count;
-        
+
         private IEnumerable<T> enumerable;
         private readonly int count;
-        
+
         private readonly IEnumerator<T> enumerator;
         private int currentElement;
 
@@ -18,6 +18,7 @@ namespace QTea.MazeGeneration
             this.enumerable = enumerable;
             this.count = count;
             enumerator = enumerable.GetEnumerator();
+            enumerator.MoveNext();
             currentElement = 0;
         }
 
@@ -45,12 +46,24 @@ namespace QTea.MazeGeneration
             return true;
         }
 
-        public T Peek() => enumerator.Current;
+        public T Peek()
+        {
+            return enumerator.Current;
+        }
 
         /// <summary>
         /// Reset the Path back to the start.
         /// </summary>
-        public void Reset() => enumerator.Reset();
+        public void Reset()
+        {
+            enumerator.Reset();
+            enumerator.MoveNext();
+            currentElement = 0;
+        }
 
+        public Path<T> Clone()
+        {
+            return new Path<T>(enumerable, count);
+        }
     }
 }
