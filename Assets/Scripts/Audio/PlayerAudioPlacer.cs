@@ -34,12 +34,6 @@ public class PlayerAudioPlacer : MonoBehaviour
             Vector2 wantedPosition = hit.point - direction * offset;
             audioSource.transform.position = Vector2.Lerp(audioSource.transform.position, wantedPosition,
                 positionalSmoothing * Time.deltaTime);
-
-            Debug.Log("hit!");
-        }
-        else
-        {
-            Debug.Log("no hit");
         }
     }
 }

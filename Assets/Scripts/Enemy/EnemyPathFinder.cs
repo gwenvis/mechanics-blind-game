@@ -65,6 +65,11 @@ public class EnemyPathFinder : MonoBehaviour
         return newPath;
     }
 
+    public Path<Vector2Int> GetPathTo(Vector2 end)
+    {
+        return GetPathTo(GetFromVector(end));
+    }
+
     private Vector2Int GetFromVector(Vector2 vector)
     {
         return new Vector2Int(Mathf.FloorToInt(vector.x + 0.5f), Mathf.FloorToInt(vector.y + 0.5f));

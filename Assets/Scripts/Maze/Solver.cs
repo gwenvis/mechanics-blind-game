@@ -34,7 +34,15 @@ namespace QTea.MazeGeneration
 
                 if (GetPosition(currentNode.Index, rows) == end)
                 {
-                    return BuildPath(currentNode, world, rows);
+                    try
+                    {
+                        return BuildPath(currentNode, world, rows);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.Log("Building path failed for some reason! Returning an empty path!");
+                        return new Path<Vector2Int>(new[] {start});
+                    }
                 }
 
                 var pos = GetPosition(currentNode.Index, rows);

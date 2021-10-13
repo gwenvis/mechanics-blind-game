@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Random = UnityEngine.Random;
 
 public class PlayerController : MonoBehaviour
@@ -9,6 +10,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float walkingSpeed;
     [SerializeField] private AudioSource footStepAudioSource;
     [SerializeField] private AudioSource waterFootstepAudioSource;
+    [SerializeField] private AudioSource keyGrabAudioSource;
     [SerializeField] private AudioClip[] footStepAudioClips;
     [SerializeField] private AudioClip[] waterAudioClips;
     [SerializeField] private float footStepInterval = 0.5f;
@@ -17,6 +19,7 @@ public class PlayerController : MonoBehaviour
     private new Rigidbody2D rigidbody;
     private Vector2 lastFootstep;
     private float moveAmount;
+    private bool _hasKey;
 
     private void Start()
     {
@@ -53,6 +56,21 @@ public class PlayerController : MonoBehaviour
         }
 
         lastFootstep = transform.position;
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.gameObject.CompareTag("Trapdoor") && _hasKey)
+        {
+            ScoreManager.CurrentScore++;
+            SceneManager.LoadScene(2);
+        }
+        else if (other.gameObject.CompareTag("Key"))
+        {
+            keyGrabAudioSource.Play();
+            _hasKey = true;
+            Destroy(other.gameObject);
+        }
     }
 
     private void PlayRandomClip(AudioSource audioSource, AudioClip[] clips)

@@ -52,6 +52,7 @@ namespace QTea
 
             internal void SetImage(Color color)
             {
+                if (!background) return;
                 if (!spriteRenderer) spriteRenderer = background.GetComponentInChildren<SpriteRenderer>();
                 if (spriteRenderer) spriteRenderer.color = color;
             }
@@ -287,6 +288,11 @@ namespace QTea
 
         private void InstantiateMaze(int columns, int rows)
         {
+            // just place a big background plate instead
+            GameObject backgroundObject = Instantiate(instanceDrawSettings.BackgroundObject, transform);
+            backgroundObject.transform.localPosition = new Vector3(rows / 2f - emptySpace / 2, columns / 2f - emptySpace / 2, 1);
+            backgroundObject.transform.localScale = new Vector3(rows, columns, 1);
+            
             int length = columns * rows;
             for (int i = 0; i < length; i++)
             {
@@ -297,18 +303,14 @@ namespace QTea
 
                 var wallObjects = new GameObject[4];
 
-                GameObject backGround = Instantiate(instanceDrawSettings.BackgroundObject, transform);
-                backGround.transform.position = new Vector3(cellPosition.x, cellPosition.y, 0.1f);
-                backGround.name = $"(r{r}, c{c})";
-
                 for (int index = 0; index < directions.Length; index++)
                 {
                     Direction direction = directions[index];
                     wallObjects[index] =
-                        PlaceWall(i, direction, (Direction)0b1111, backGround.transform);
+                        PlaceWall(i, direction, (Direction)0b1111, transform);
                 }
 
-                cellViews[i] = new CellView(wallObjects, backGround);
+                cellViews[i] = new CellView(wallObjects, null);
             }
         }
 
