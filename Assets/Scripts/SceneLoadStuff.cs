@@ -1,18 +1,22 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class SceneLoadStuff : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    [SerializeField] private int _scene;
+    [SerializeField] private LoadSceneParameters _params;
+    private AsyncOperation _asyncOperation;
+
+    public void LoadScene()
     {
-        
+        _asyncOperation = SceneManager.LoadSceneAsync(_scene, _params);
+        _asyncOperation.allowSceneActivation = false;
     }
 
-    // Update is called once per frame
-    void Update()
+    public void ActivateScene()
     {
-        
+        _asyncOperation.allowSceneActivation = true;
     }
 }

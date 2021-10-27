@@ -1,12 +1,17 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering.Universal;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
 public class PlayerController : MonoBehaviour
 {
+    public bool IsFireOn => _fireOn;
+    
     [SerializeField] private float walkingSpeed;
     [SerializeField] private AudioSource footStepAudioSource;
     [SerializeField] private AudioSource waterFootstepAudioSource;
@@ -16,15 +21,29 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float footStepInterval = 0.5f;
     [SerializeField] [Range(0.0f, 1.0f)] private float waterFootStepChance = 0.1f;
 
+    [Title("Fire")] [SerializeField] private Light2D _light;
+    [SerializeField] private float _fireDuration = 10.0f;
+    [SerializeField] private float _fireRechargeRatio = 2.0f;
+    [SerializeField] private float _fireToggleDelay = 2.0f;
+    [SerializeField] private AudioSource _fireOnAudioSource;
+    [SerializeField] private AudioSource _fireOffAudioSource;
+    [SerializeField] private AudioSource _constantFireSource;
+    [SerializeField] private UnityEngine.UI.Image _fireBar;
+
     private new Rigidbody2D rigidbody;
     private Vector2 lastFootstep;
     private float moveAmount;
+    private float _currentFireValue;
+    private bool _fireOn = true;
     private bool _hasKey;
+    private float _fireDelay;
 
     private void Start()
     {
         rigidbody = GetComponent<Rigidbody2D>();
         lastFootstep = transform.position;
+        _currentFireValue = _fireDuration;
+        _fireDelay = Time.time + _fireToggleDelay;
     }
 
     private void Update()
@@ -40,7 +59,45 @@ public class PlayerController : MonoBehaviour
             velocity *= walkingSpeed;
         }
 
+        _currentFireValue = Mathf.Clamp(_currentFireValue + (_fireOn ? -Time.deltaTime : Time.deltaTime * _fireRechargeRatio), 0, _fireDuration);
+
+        if (_fireOn && _currentFireValue < Mathf.Epsilon)
+        {
+            TurnOffFire();
+        }
+        
+        _fireBar.transform.localScale = new Vector3(_currentFireValue / _fireDuration, 1, 1);
+
+        if (Input.GetKeyDown(KeyCode.E) && Time.time > _fireDelay)
+        {
+            ToggleFire();
+        }
+
         rigidbody.velocity = (Vector3)velocity;
+    }
+
+    private void TurnOffFire()
+    {
+        _fireOffAudioSource.Play();
+        _constantFireSource.Pause();
+        _light.enabled = false;
+        _fireOn = false;
+        _fireDelay = Time.time + _fireToggleDelay;
+    }
+
+    private void TurnOnFire()
+    {
+        _fireOnAudioSource.Play();
+        _constantFireSource.UnPause();
+        _light.enabled = true;
+        _fireOn = true;
+        _fireDelay = Time.time + _fireToggleDelay;
+    }
+
+    private void ToggleFire()
+    {
+        if (_currentFireValue > Mathf.Epsilon && !_fireOn) TurnOnFire();
+        else if(_fireOn) TurnOffFire();
     }
 
     private void FixedUpdate()
@@ -63,7 +120,7 @@ public class PlayerController : MonoBehaviour
         if (other.gameObject.CompareTag("Trapdoor") && _hasKey)
         {
             ScoreManager.CurrentScore++;
-            SceneManager.LoadScene(2);
+            SceneManager.LoadScene(3);
         }
         else if (other.gameObject.CompareTag("Key"))
         {

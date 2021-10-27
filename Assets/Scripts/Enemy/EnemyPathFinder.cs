@@ -12,12 +12,15 @@ public class EnemyPathFinder : MonoBehaviour
     public UnityEvent<Path<Vector2Int>> _pathGeneratedEvent;
 
     [SerializeField] private Transform _player;
+    [SerializeField] private WarnUI _warnUI;
 
     private bool _mazeImported = false;
     private Maze _maze;
     private Path<Vector2Int> _path;
     private Vector2Int _start;
     private Vector2Int _end;
+
+    private bool _newPath = false;
 
     public void ImportMaze(MazeController.GeneratedMaze generatedMaze)
     {
@@ -35,9 +38,20 @@ public class EnemyPathFinder : MonoBehaviour
             {
                 if (!_path.TryNext(out Vector2Int pos)) break;
 
+                if (_newPath)
+                {
+                    if (GetFromVector(_player.transform.position) == pos)
+                    {
+                        _warnUI.StartWarn();
+                        _newPath = false;
+                    }
+                }
+                
                 Debug.DrawLine((Vector2)previous, (Vector2)pos, Color.magenta, Time.deltaTime, false);
                 previous = pos;
             }
+
+            _newPath = false;
 
             _path.Reset();
         }
@@ -50,6 +64,7 @@ public class EnemyPathFinder : MonoBehaviour
         var randomEnd = new Vector2Int(Random.Range(0, _maze.Rows), Random.Range(0, _maze.Columns));
         var newPath = _maze.Solve(start, randomEnd);
         _path = newPath.Clone();
+        _newPath = true;
         this._start = start;
         _end = randomEnd;
         return newPath;
@@ -60,6 +75,7 @@ public class EnemyPathFinder : MonoBehaviour
         Vector2Int start = GetFromVector(transform.position);
         var newPath = _maze.Solve(start, end);
         _path = newPath.Clone();
+        _newPath = true;
         _start = start;
         _end = end;
         return newPath;

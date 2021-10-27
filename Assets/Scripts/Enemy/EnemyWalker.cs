@@ -23,6 +23,9 @@ public class EnemyWalker : MonoBehaviour
     [Title("Player")] 
     [SerializeField] private GameObject _player;
     [SerializeField] private LayerMask _collisionMask;
+    [SerializeField] private float _playerSightTime = 1.0f;
+    [SerializeField] private float _playerLightOffDetectionRange = 1.5f;
+    [SerializeField] private int _scene;
 
     [Title("Movement")]
     [SerializeField] private float _movementSpeed;
@@ -46,6 +49,8 @@ public class EnemyWalker : MonoBehaviour
 
     private State _currentState;
 
+    private float? _lastPlayerSight;
+    
     // pathing
     private EnemyPathFinder _pathFinder;
     private Path<Vector2Int> _path;
@@ -95,11 +100,29 @@ public class EnemyWalker : MonoBehaviour
         _debugDirection = direction;
         _debugRaycastLength = Mathf.Infinity;
         
-        RaycastHit2D raycastHit = Physics2D.Raycast(transform.position, direction, Mathf.Infinity, _collisionMask);
-        if (!raycastHit) return;
-        
+        RaycastHit2D raycastHit = Physics2D.Raycast(transform.position, direction, _player.GetComponent<PlayerController>().IsFireOn ? Mathf.Infinity : _playerLightOffDetectionRange, _collisionMask);
+        if (!raycastHit)
+        {
+            _lastPlayerSight = null;
+            return;
+        }
+
         _debugRaycastLength = raycastHit.distance;
-        if(raycastHit.transform == _player.transform) EnterState(State.Chasing);
+
+
+        if (raycastHit.transform != _player.transform) return;
+        
+        if (_lastPlayerSight == null)
+        {
+            _lastPlayerSight = Time.time;
+            return;
+        }
+
+        if (Time.time > _lastPlayerSight + _playerSightTime)
+        {
+            EnterState(State.Chasing);
+            _lastPlayerSight = null;
+        }
     }
 
     private void UpdateIdleState()
@@ -147,7 +170,7 @@ public class EnemyWalker : MonoBehaviour
         if (other.transform != _player.transform) return;
 
         //PlayerHitEvent?.Invoke();
-        SceneManager.LoadScene(1);
+        SceneManager.LoadScene(_scene);
     }
 
     private void PlayRandomAudioClip(AudioSource source, AudioClip[] clips, float volume)
