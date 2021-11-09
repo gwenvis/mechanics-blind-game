@@ -31,6 +31,7 @@ public class MazeController : MonoBehaviour
     [SerializeField] private int rows;
     [SerializeField] private int columns;
     [SerializeField] private int removeWalls = 0;
+    [SerializeField] private bool removeDeadEnds = false;
 
     private void Start()
     {
@@ -40,7 +41,8 @@ public class MazeController : MonoBehaviour
         var mazeGenerator =
             new MazeGenerator(columns, rows,
                 entrance, exit,
-                random, removeWalls);
+                random, 
+                removeWalls: removeWalls, removeDeadEnds: removeDeadEnds);
 
         Maze maze = mazeGenerator.Generate(0);
 

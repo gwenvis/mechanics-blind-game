@@ -2,16 +2,16 @@ using UnityEngine;
 using UnityEngine.Experimental.Rendering.Universal;
 using System.Collections.Generic;
 
-public class LightFlickerEffect : MonoBehaviour {
-    [Tooltip("External light to flicker; you can leave this null if you attach script to a light")]
-    public Light2D light;
-    [Tooltip("Minimum random light intensity")]
-    public float minIntensity = 0f;
-    [Tooltip("Maximum random light intensity")]
-    public float maxIntensity = 1f;
-    [Tooltip("How much to smooth out the randomness; lower values = sparks, higher = lantern")]
-    [Range(1, 50)]
-    public int smoothing = 5;
+public class LightFlickerEffect : MonoBehaviour 
+{
+    public float Scaling { get; set; } = 1.0f;
+
+    [SerializeField] private Light2D light;
+    [SerializeField] private float minIntensity = 0f;
+    [SerializeField] private float maxIntensity = 1f;
+    [Range(1, 50)] [SerializeField] private int smoothing = 5;
+
+    private bool _active = true;
 
     // Continuous average calculation via FIFO queue
     // Saves us iterating every time we update, we just change by the delta
@@ -29,6 +29,12 @@ public class LightFlickerEffect : MonoBehaviour {
         lastSum = 0;
     }
 
+    public void SetActive(bool active)
+    {
+        _active = active;
+        light.enabled = active;
+    }
+
     void Start() {
          smoothQueue = new Queue<float>(smoothing);
          // External or internal light?
@@ -38,7 +44,7 @@ public class LightFlickerEffect : MonoBehaviour {
     }
 
     void Update() {
-        if (light == null)
+        if (light == null || !_active)
             return;
 
         // pop off an item if too big
@@ -52,7 +58,7 @@ public class LightFlickerEffect : MonoBehaviour {
         lastSum += newVal;
 
         // Calculate new smoothed average
-        light.intensity = lastSum / (float)smoothQueue.Count;
+        light.intensity = (lastSum / (float)smoothQueue.Count) * Scaling;
     }
 
 }

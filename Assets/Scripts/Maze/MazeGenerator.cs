@@ -1,3 +1,4 @@
+using QTea.MazeGeneration;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -23,6 +24,7 @@ namespace QTea
         private readonly int entrance;
         private readonly int exit;
         private readonly int removeWalls;
+        private readonly bool removeDeadEnds;
         private readonly IRandom random;
         private readonly Cell[] cells;
 
@@ -35,13 +37,14 @@ namespace QTea
             { Direction.East, Direction.West }, { Direction.West, Direction.East }
         };
 
-        public MazeGenerator(int columns, int rows, int entrance, int exit, IRandom random, int removeWalls = 0)
+        public MazeGenerator(int columns, int rows, int entrance, int exit, IRandom random, int removeWalls = 0, bool removeDeadEnds = false)
         {
             this.columns = columns;
             this.rows = rows;
             this.entrance = entrance;
             this.exit = exit;
             this.removeWalls = removeWalls;
+            this.removeDeadEnds = removeDeadEnds;
             this.random = random;
 
             var cells = new Cell[columns * rows];
@@ -72,9 +75,52 @@ namespace QTea
                 currentLoop++;
             }
 
-            RemoveWallsPhase();
+            if (removeWalls > 0) RemoveWallsPhase();
+            if (removeDeadEnds) RemoveDeadEndsPhase();
 
             return new Maze(cells, columns, rows, true, currentLoop);
+        }
+
+        private void RemoveDeadEndsPhase()
+        {
+            bool HasWall(Cell cell, Direction direction) => (cell.Walls & direction) != 0;
+            int WallCount(Cell cell) => Enum.GetValues(typeof(Direction)).Cast<Enum>().Count(cell.Walls.HasFlag);
+            Maze CreateMaze() => new Maze(cells, columns, rows, false, 0);
+
+            for (int i = 0; i < cells.Length; i++)
+            {
+                if (WallCount(cells[i]) < 3) continue;
+
+
+                var relativeCells = GetRelativeCells(i).Where(x=>x.exists && HasWall(cells[i], x.direction)).ToList();
+                bool valid = false;
+
+                do
+                {
+                    if(relativeCells.Count == 0)
+                    {
+                        Debug.Log("I give up...");
+                        break;
+                    }
+
+                    int randomDirectionIndex = random.Range(relativeCells.Count);
+                    (bool exists, int index, Direction direction) = relativeCells[randomDirectionIndex];
+                    relativeCells.RemoveAt(randomDirectionIndex);
+
+                    var path = Solver.Solve(CreateMaze(), GetVectorPosition(i), GetVectorPosition(index));
+                    // if this path took longer to solve than 4 steps, it's valid!
+                    valid = path.Count >= 4;
+                    Debug.Log($"Path count was: {path.Count}");
+
+                    if(valid)
+                    {
+                        // carve the wall
+                        cells[i].Walls &= ~direction;
+                        cells[index].Walls &= ~opposites[direction];
+                    }
+                }
+                while (!valid);
+            }
         }
 
         private void RemoveWallsPhase()
@@ -180,6 +226,12 @@ namespace QTea
         private (int row, int col) GetPosition(int index)
         {
             return (index % rows, index / rows);
+        }
+
+        private Vector2Int GetVectorPosition(int index)
+        {
+            (int row, int col) = GetPosition(index);
+            return new Vector2Int(row, col);
         }
 
         /// <summary>
