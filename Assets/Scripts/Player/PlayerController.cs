@@ -34,6 +34,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private AudioSource _constantFireSource;
     [SerializeField] private TextMeshProUGUI _lightOnText; // text when light IS on
     [SerializeField] private TextMeshProUGUI _lightOffText; // text when light IS off
+    [SerializeField] private float _crankMaxAudio = 0.5f;
 
     [Title("Stamina")]
     [SerializeField] private float _staminaMaxValue = 10.0f;
@@ -126,10 +127,15 @@ public class PlayerController : MonoBehaviour
                 if(_mashTime > _mashMaxTime)
                 {
                     TurnOnFire();
+                    _fireOnAudioSource.volume = 0;
                 }
             }
 
-            if(!_isLightOn) _light.Scaling = _mashTime / (_mashMaxTime * 2);
+            if(!_isLightOn)
+            {
+                _light.Scaling = _mashTime / (_mashMaxTime * 2);
+                _fireOnAudioSource.volume = (_mashTime / _mashMaxTime) * _crankMaxAudio;
+            }
         }
         else if(Time.time > _fireDelay && Input.GetKeyDown(KeyCode.Space))
         {
@@ -142,6 +148,8 @@ public class PlayerController : MonoBehaviour
         _fireOffAudioSource.Play();
         _constantFireSource.Pause();
         _light.SetActive(false);
+        _mashTime = 0;
+        _fireOnAudioSource.volume = 0;
         _isLightOn = false;
         _fireDelay = Time.time + _fireToggleDelay;
         _lightOnText.gameObject.SetActive(false);
@@ -150,7 +158,7 @@ public class PlayerController : MonoBehaviour
 
     private void TurnOnFire()
     {
-        _fireOnAudioSource.Play();
+        _fireOffAudioSource.Play();
         _constantFireSource.UnPause();
         _light.SetActive(true);
         _isLightOn = true;

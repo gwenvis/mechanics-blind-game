@@ -7,6 +7,7 @@ public class LightFlickerEffect : MonoBehaviour
     public float Scaling { get; set; } = 1.0f;
 
     [SerializeField] private Light2D light;
+    [SerializeField] private Light2D rimLight;
     [SerializeField] private float minIntensity = 0f;
     [SerializeField] private float maxIntensity = 1f;
     [Range(1, 50)] [SerializeField] private int smoothing = 5;
@@ -44,8 +45,12 @@ public class LightFlickerEffect : MonoBehaviour
     }
 
     void Update() {
+
+        rimLight.enabled = Scaling > 0.5f;
+
         if (light == null || !_active)
             return;
+
 
         // pop off an item if too big
         while (smoothQueue.Count >= smoothing) {

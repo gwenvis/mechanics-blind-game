@@ -91,6 +91,7 @@ namespace QTea
         [SerializeField] [HorizontalGroup] private int mazeColumns = 7, mazeRows = 7;
         [HideIf("dontSelfGenerate")]
         [SerializeField] [MinValue(0)] private int removeWallAmount = 0;
+        [HideIf(nameof(dontSelfGenerate)), SerializeField] private bool removeDeadEnds = false;
         [HideIf("dontSelfGenerate")]
         [SerializeField] private bool slowGenerate;
         [HideIf("dontSelfGenerate")]
@@ -134,7 +135,7 @@ namespace QTea
         {
             if (!slowGenerate && !dontSelfGenerate)
             {
-                mazeGenerator = new MazeGenerator(mazeColumns, mazeRows, 2, 4, new UnityRandom(), removeWallAmount);
+                mazeGenerator = new MazeGenerator(mazeColumns, mazeRows, 2, 4, new UnityRandom(), removeWallAmount, removeDeadEnds);
                 BuildMazeBase(mazeColumns, mazeRows);
                 //UpdateMaze(mazeGenerator.Generate(0));
                 done = true;
@@ -146,7 +147,7 @@ namespace QTea
         [Button]
         private void InitializeMaze()
         {
-            mazeGenerator = new MazeGenerator(mazeColumns, mazeRows, 0, 4, new UnityRandom(), removeWallAmount);
+            mazeGenerator = new MazeGenerator(mazeColumns, mazeRows, 0, 4, new UnityRandom(), removeWallAmount, removeDeadEnds);
             BuildMazeBase(mazeColumns, mazeRows);
             generateState = 0;
         }

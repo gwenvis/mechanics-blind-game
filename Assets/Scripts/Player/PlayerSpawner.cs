@@ -20,6 +20,6 @@ public class PlayerSpawner : MonoBehaviour
     {
         int col = spawnerType == SpawnerType.Player ? generatedMaze.Entrance : generatedMaze.Exit;
         int row = spawnerType == SpawnerType.Player ? 0 : generatedMaze.Rows - 1;
-        transform.position = new Vector3(row, generatedMaze.Entrance, zOffset);
+        transform.position = new Vector3(row, col, zOffset);
     }
 }

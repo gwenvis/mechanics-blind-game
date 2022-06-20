@@ -109,7 +109,7 @@ namespace QTea
 
                     var path = Solver.Solve(CreateMaze(), GetVectorPosition(i), GetVectorPosition(index));
                     // if this path took longer to solve than 4 steps, it's valid!
-                    valid = path.Count >= 4;
+                    valid = path.Count > 4;
                     Debug.Log($"Path count was: {path.Count}");
 
                     if(valid)
